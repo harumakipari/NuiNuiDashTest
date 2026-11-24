@@ -3,6 +3,7 @@
 #include "ComboUiActor.h"
 
 #include "ScissorsPlayer1.h"
+#include "ScoreCalculator.h"
 #include "Engine/Scene/Scene.h"
 #include "Physics/CollisionFunction.h"
 

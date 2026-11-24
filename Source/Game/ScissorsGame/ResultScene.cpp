@@ -10,6 +10,7 @@
 #include "HighScoreMedalActor.h"
 #include "ResultBookActor.h"
 #include "SaveDataManager.h"
+#include "ScoreCalculator.h"
 #include "ScoreHistoryManager.h"
 #include "TitleStageActor.h"
 #include "Components/Audio/CoreAudioSourceComponent.h"

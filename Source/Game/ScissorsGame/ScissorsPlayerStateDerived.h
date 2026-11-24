@@ -126,6 +126,8 @@ public:
     // ステート名を取得
     const char* GetName() const override { return "Dash"; }
 
+    float GetRemainingSegmentDistance() const { return remainingSegmentDistance; }
+
 private:
     float elapsedTime = 0.0f;    // 経過時間
     DirectX::XMFLOAT3 startPos = { 0.0f,0.0f,0.0f };  // 開始位置
@@ -135,6 +137,10 @@ private:
     float segmentElapsed = 0.0f;
     float segmentDuration = 0.0f;
     float speed = 50.0f;
+    bool steerDuringDash = false;
+    DirectX::XMFLOAT3 steeringDirection = { 0.0f, 0.0f, 1.0f };
+    float remainingSegmentDistance = 0.0f;
+    float steeringDashDistance = 0.0f;
 };
 
 // スタンステートオブジェクト

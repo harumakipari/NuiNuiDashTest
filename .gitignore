@@ -72,3 +72,7 @@ Data/Log/
 Data/Sound/
 Data/Environment/
 External/
+x64/
+git status
+*.cod
+*.cso

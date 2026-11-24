@@ -16,7 +16,9 @@
 #include "ScissorsGameEnemyBaseActor.h"
 #include "ScissorsGameManager.h"
 #include "ScissorsGameState.h"
+#include "ScoreCalculator.h"
 #include "ScorePopupActor.h"
+#include "StageData.h"
 #include "TutorialActor.h"
 #include "YarnWallActor.h"
 #include "Engine/Scene/SceneBase.h"
@@ -30,16 +32,10 @@ void ScissorsPlayer1::Initialize(const Transform& transform)
     skeletalMeshComponent = AddComponent<SkeletalMeshComponent>(parentName);
     skeletalMeshComponent->SetModel("./Data/TeamModels/Player/ScissorsPlayer.gltf", false, true);
     skeletalMeshComponent->overrideDeferredPipelineName = "ScissorsGamePlayerPS";
-    //skeletalMeshComponent->overrideDeferredPipelineName = "GameModelColorFilterPS";
     skeletalMeshComponent->plusAlphaCBuffer->data.objectType = ObjectType::Player;
 
     // アニメーションコントローラーを作成
     auto controller = std::make_shared<AnimationController>(skeletalMeshComponent.get());
-    //controller->AddAnimation("Idle", 0);
-    //controller->AddAnimation("ChargeDash", 1);
-    //controller->AddAnimation("Dash", 2);
-    //controller->AddAnimation("Run", 3);
-
     controller->AddAnimation("Idle", 0);
     controller->AddAnimation("Run", 1);     // 走り
     controller->AddAnimation("Dash", 2);    // ダッシュ中
@@ -500,7 +496,6 @@ void ScissorsPlayer1::Update(float deltaTime)
     }
 
 
-
     // 左スティック入力
     float stickX = intent.leftMove.x;
     float stickZ = intent.leftMove.z;
@@ -636,6 +631,28 @@ void ScissorsPlayer1::DrawImGuiDetails()
     ImGui::Text("HP: %d", hp);
     ImGui::Text("Dash Count: %d", dashCount);
     ImGui::Text("Current State: %s", stateMachine_->GetStateName());
+
+    const char* dashMoveModes[] =
+    {
+        "FixedPath",
+        "SteerDuringDash"
+    };
+
+    int currentMode = static_cast<int>(dashMoveMode);
+    if (ImGui::Combo("Dash Move Mode", &currentMode, dashMoveModes, IM_ARRAYSIZE(dashMoveModes)))
+    {
+        dashMoveMode = static_cast<DashMoveMode>(currentMode);
+    }
+
+    ImGui::DragFloat("Steering Turn Speed (deg/s)", &steeringTurnSpeedDegrees, 1.0f, 0.0f, 720.0f);
+    ImGui::DragFloat("Steering Initial Speed", &steeringInitialSpeed, 0.1f, 0.0f, 100.0f);
+    ImGui::DragFloat("Steering Reflected Speed", &steeringReflectedSpeed, 0.1f, 0.0f, 100.0f);
+    ImGui::Text("Current Reflection Count: %d", currentSegment);
+    if (auto dashState = dynamic_cast<ScissorsPlayerDashState*>(stateMachine_->GetCurrentState()))
+    {
+        ImGui::Text("Remaining Segment Distance: %.2f", dashState->GetRemainingSegmentDistance());
+    }
+
 #endif
 }
 

@@ -8,6 +8,7 @@
 #include "ScissorsGameEnemyBaseActor.h"
 #include "Game/Actors/Base/Character.h"
 #include "ScissorsPlayer1.h"
+#include "ScoreCalculator.h"
 #include "ScoreHistoryManager.h"
 #include "TrailModelActor.h"
 #include "TutorialActor.h"
@@ -206,6 +207,7 @@ void ScissorsPlayerChargeDashState::Execute(float deltaTime)
     }*/
 
     float dashDistance = minDistance + aimData.power * (maxDistance - minDistance);
+    player->SetDashDistance(dashDistance);
     float remainingDist = dashDistance;
 
     if (InputSystem::GetInputState("DashCancel", InputStateMask::Trigger))
@@ -504,18 +506,54 @@ void ScissorsPlayerDashState::Enter()
     elapsedTime = 0.0f;
 
 
-    if (player->fixedDashPoints.size() < 2)
+    steerDuringDash = player->IsSteerDuringDash();
+
+    if (!steerDuringDash && player->fixedDashPoints.size() < 2)
     {
         player->GetStateMachine()->ChangeState("Idle");
         return;
     }
 
-    segmentStart = player->fixedDashPoints[0];
-    segmentEnd = player->fixedDashPoints[1];
+    if (player->fixedDashPoints.size() >= 2)
+    {
+        segmentStart = player->fixedDashPoints[0];
+        segmentEnd = player->fixedDashPoints[1];
+    }
+    else
+    {
+        segmentStart = player->GetPosition();
+        segmentEnd = segmentStart;
+    }
 
     float dist = MathHelper::Distance(segmentStart, segmentEnd);
     segmentDuration = dist / speed;
     segmentElapsed = 0.0f;
+    remainingSegmentDistance = dist;
+    steeringDashDistance = player->GetDashDistance();
+
+    if (steerDuringDash)
+    {
+        steeringDirection =
+        {
+            segmentEnd.x - segmentStart.x,
+            0.0f,
+            segmentEnd.z - segmentStart.z
+        };
+
+        float steeringDirectionLength = sqrt(steeringDirection.x * steeringDirection.x + steeringDirection.z * steeringDirection.z);
+        if (steeringDirectionLength > 0.0001f)
+        {
+            steeringDirection.x /= steeringDirectionLength;
+            steeringDirection.z /= steeringDirectionLength;
+        }
+        else
+        {
+            steeringDirection = player->GetForward();
+            steeringDirection.y = 0.0f;
+        }
+
+        remainingSegmentDistance = steeringDashDistance;
+    }
 
     // プレイヤーのダッシュの値をリセット
     player->currentSegment = 0;
@@ -553,6 +591,124 @@ void ScissorsPlayerDashState::Execute(float deltaTime)
     }
     // 現在位置
     XMFLOAT3 currentPos = player->GetPosition();
+    if (steerDuringDash)
+    {
+        XMFLOAT3 inputDirection = player->inputComponent->GetMoveInput();
+        inputDirection.y = 0.0f;
+        float inputLength = sqrt(inputDirection.x * inputDirection.x + inputDirection.z * inputDirection.z);
+        if (inputLength > 0.2f)
+        {
+            inputDirection.x /= inputLength;
+            inputDirection.z /= inputLength;
+
+            float currentAngle = atan2(steeringDirection.z, steeringDirection.x);
+            float targetAngle = atan2(inputDirection.z, inputDirection.x);
+            float angleDifference = atan2(sin(targetAngle - currentAngle), cos(targetAngle - currentAngle));
+            float maxTurnRadians = player->steeringTurnSpeedDegrees * (3.1415926535f / 180.0f) * deltaTime;
+            float turnedAngle = currentAngle + std::clamp(angleDifference, -maxTurnRadians, maxTurnRadians);
+            steeringDirection = { cos(turnedAngle), 0.0f, sin(turnedAngle) };
+        }
+
+        float movementSpeed = player->currentSegment == 0 ? player->steeringInitialSpeed : player->steeringReflectedSpeed;
+        float moveDistance = std::min<float>(movementSpeed * deltaTime, remainingSegmentDistance);
+        XMFLOAT3 nextPos =
+        {
+            currentPos.x + steeringDirection.x * moveDistance,
+            currentPos.y,
+            currentPos.z + steeringDirection.z * moveDistance
+        };
+
+        HitResultWithActor hit;
+        uint32_t mask = CollisionHelper::ToBit(CollisionLayer::Wall) | CollisionHelper::ToBit(CollisionLayer::EnemyRedirect)
+            | CollisionHelper::ToBit(CollisionLayer::Boss) | CollisionHelper::ToBit(CollisionLayer::Bobbin);
+
+        if (CollisionFunction::SphereRayCast(currentPos, nextPos, hit, 0.2f, mask))
+        {
+            if (auto bobbin = dynamic_cast<BobbinActor*>(hit.actor))
+            {
+                player->hitBobbinInThisDash = true;
+            }
+
+            if (dynamic_cast<RabbitBossEnemyActor*>(hit.actor) || dynamic_cast<BobbinActor*>(hit.actor))
+            {
+                player->SetPosition({ hit.hitPoint.x, 0.0f, hit.hitPoint.z });
+                player->GetStateMachine()->ChangeState("Idle");
+                return;
+            }
+
+            float normalLengthSq = hit.normal.x * hit.normal.x + hit.normal.z * hit.normal.z;
+            if (normalLengthSq < 0.0001f)
+            {
+                player->GetStateMachine()->ChangeState("Idle");
+                return;
+            }
+
+            if (auto enemy = dynamic_cast<EnemyBase*>(hit.actor))
+            {
+                XMFLOAT3 enemyPos = enemy->GetPosition();
+                XMFLOAT3 local = { hit.hitPoint.x - enemyPos.x, 0.0f, hit.hitPoint.z - enemyPos.z };
+                float side = local.x;
+                steeringDirection = side > 0.0f
+                    ? XMFLOAT3{ steeringDirection.z, 0.0f, -steeringDirection.x }
+                    : XMFLOAT3{ -steeringDirection.z, 0.0f, steeringDirection.x };
+                player->SetPosition(
+                {
+                    hit.hitPoint.x + steeringDirection.x * 0.25f,
+                    0.0f,
+                    hit.hitPoint.z + steeringDirection.z * 0.25f
+                });
+            }
+            else
+            {
+                float dot = steeringDirection.x * hit.normal.x + steeringDirection.z * hit.normal.z;
+                steeringDirection.x -= 2.0f * dot * hit.normal.x;
+                steeringDirection.z -= 2.0f * dot * hit.normal.z;
+                float directionLength = sqrt(steeringDirection.x * steeringDirection.x + steeringDirection.z * steeringDirection.z);
+                if (directionLength < 0.0001f)
+                {
+                    player->GetStateMachine()->ChangeState("Idle");
+                    return;
+                }
+
+                steeringDirection.x /= directionLength;
+                steeringDirection.z /= directionLength;
+                player->SetPosition(
+                {
+                    hit.hitPoint.x + hit.normal.x * 0.25f,
+                    0.0f,
+                    hit.hitPoint.z + hit.normal.z * 0.25f
+                });
+            }
+
+            ++player->currentSegment;
+            remainingSegmentDistance = steeringDashDistance * 0.9f;
+            player->rotationComponent->SetDirection(steeringDirection);
+            return;
+        }
+
+        player->SetPosition(nextPos);
+        remainingSegmentDistance -= moveDistance;
+        player->rotationComponent->SetDirection(steeringDirection);
+        float trailDistance = MathHelper::Distance(currentPos, player->lastTrailSpawnPos);
+        if (trailDistance >= player->trailSpawnDistance)
+        {
+            ScissorsPlayer1::TrailPoint point{};
+            point.position = currentPos;
+            point.direction = steeringDirection;
+            point.rotation = player->GetForward();
+            point.life = 0.3f;
+            player->lastTrailSpawnPos = currentPos;
+
+            Transform tr{ point.position,{0.0f,0.0f,0.0f},{1.0f,1.0f,1.0f} };
+            auto trailModel = player->GetOwnerScene()->GetActorManager()->CreateAndRegisterActorWithTransform<TrailModelActor>("trailModel", tr);
+            trailModel->SetDirection(point.direction);
+        }
+        if (remainingSegmentDistance <= 0.0001f)
+        {
+            player->GetStateMachine()->ChangeState("Idle");
+        }
+        return;
+    }
 #if 0
     // 軌跡地点を追加
     XMFLOAT3 trailPosition = currentPos;
@@ -609,6 +765,7 @@ void ScissorsPlayerDashState::Execute(float deltaTime)
     // 補間
     XMFLOAT3 nextPos = MathHelper::Lerp(segmentStart, segmentEnd, t);
     player->SetPosition(nextPos);
+    remainingSegmentDistance = MathHelper::Distance(nextPos, segmentEnd);
 
 
     // 軌跡追加
@@ -753,6 +910,7 @@ void ScissorsPlayerDashState::Execute(float deltaTime)
         float dist = MathHelper::Distance(segmentStart, segmentEnd);
         segmentDuration = dist / 20.0f;
         segmentElapsed = 0.0f;
+        remainingSegmentDistance = dist;
 
 #if 1
         // 向き更新

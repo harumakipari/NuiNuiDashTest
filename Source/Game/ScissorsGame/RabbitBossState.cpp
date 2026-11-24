@@ -10,6 +10,7 @@
 #include "ScissorsGameManager.h"
 #include "ScissorsGameState.h"
 #include "ScissorsPlayer1.h"
+#include "ScoreCalculator.h"
 #include "Engine/Scene/Scene.h"
 #include "Engine/Utility/Time.h"
 #include "Game/Actors/Camera/Camera.h"

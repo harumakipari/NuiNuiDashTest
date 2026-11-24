@@ -9,6 +9,7 @@
 #include "ScissorsGameManager.h"
 #include "ScissorsPlayer1.h"
 #include "ScissorsUIStartActor.h"
+#include "ScoreCalculator.h"
 #include "WaveManagaer.h"
 #include "Engine/Scene/Scene.h"
 #include "Physics/CollisionFunction.h"

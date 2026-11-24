@@ -1,6 +1,5 @@
 #pragma once
 #include "DecalData.h"
-#include "ScoreCalculator.h"
 #include "Trail.h"
 #include "Components/Audio/CoreAudioSourceComponent.h"
 #include "Components/Controller/ControllerComponent.h"
@@ -24,6 +23,12 @@ class ScissorsPlayer1 :public Character
         DirectX::XMFLOAT3 dir;
         float power;
         bool isValid;
+    };
+
+    enum class DashMoveMode:uint8_t
+    {
+        FixedPath,
+        SteerDuringDash
     };
 
 public:
@@ -70,6 +75,8 @@ public:
 
     // 狙いの情報を取得する関数　これでダッシュの方向や溜めの強さを決める
     AimData GetAimData() const { return lastValidAimData; }
+    float GetDashDistance() const { return dashDistance; }
+    void SetDashDistance(float value) { dashDistance = value; }
 
     // ダッシュ可能かどうかを取得する関数
     bool CanDash() const;
@@ -107,7 +114,10 @@ public:
     // 死亡演出のポストエフェクトの半径を設定する
     void SetDeathRadius(float r) { this->deathRadius = r; }
 
-    
+    // スティックで変わるダッシュモードかどうか
+    bool IsSteerDuringDash() const { return dashMoveMode == DashMoveMode::SteerDuringDash; }
+
+
 private:
     // 入力から狙いの情報を取得する
     AimData GetAimData(const MoveIntent& intent, float deltaTime);
@@ -178,6 +188,12 @@ public:
     // トレイルモデル関連
     float trailSpawnDistance = 1.0f;
     DirectX::XMFLOAT3 lastTrailSpawnPos = { 0.0f,0.0f,0.0f };
+
+    // 突進の仕方
+    DashMoveMode dashMoveMode = DashMoveMode::FixedPath;
+    float steeringTurnSpeedDegrees = 240.0f;
+    float steeringInitialSpeed = 50.0f;
+    float steeringReflectedSpeed = 20.0f;
 private:
     std::shared_ptr<BoxComponent> dashAttackBox; // ダッシュ攻撃の当たり判定用のSphereComponent
     std::shared_ptr<SphereComponent> scissorsAttackSphere; // ハサミ攻撃の当たり判定用のSphereComponent
@@ -273,5 +289,5 @@ private:
 
 
     // 勝利演出用の変数
-    bool startWinPerform = false; 
+    bool startWinPerform = false;
 };

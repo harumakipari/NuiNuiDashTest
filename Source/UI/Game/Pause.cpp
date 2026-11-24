@@ -6,6 +6,7 @@
 #include "Engine/Scene/Scene.h"
 #include "Engine/Utility/Time.h"
 #include "Game/ScissorsGame/ScissorsPlayer1.h"
+#include "Game/ScissorsGame/ScoreCalculator.h"
 
 void Pause::Initialize(const Transform& transform)
 {
@@ -87,8 +88,6 @@ void Pause::Initialize(const Transform& transform)
                             std::string(
                                 magic_enum::enum_name(stage))
                         }, });
-            //Scene::_transition("LoadingScene", { std::make_pair("preload","TitleScene"), std::make_pair("type", types[rand() % 2]) });
-
         };
 
     GetOwnerScene()->GetUIManager()->Add(returnTitleButton);
