@@ -66,3 +66,9 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+.vs/
+3dgp/
+Data/Log/
+Data/Sound/
+Data/Environment/
+External/
